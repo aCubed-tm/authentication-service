@@ -28,10 +28,9 @@ func main() {
 }
 
 func run_client() {
-	conn, err := grpc.Dial("localhost" + port, grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial("localhost"+port, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
-
 	}
 	defer conn.Close()
 	c := pb.NewTestServiceClient(conn)
