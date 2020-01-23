@@ -6,7 +6,10 @@ trigger:
 - master
 
 resources:
-- repo: self
+  repositories:
+  - repository: self
+    checkoutOptions:
+      submodules: true
 
 variables:
 
@@ -19,10 +22,7 @@ variables:
   imagePullSecret: 'acubedcr2081e82b-auth'
 
   # Agent VM image name
-  vmImageName: 'ubuntu-latest'
-  
-  submodules: true
-  
+  vmImageName: 'ubuntu-latest'  
 
 stages:
 - stage: Build
@@ -33,6 +33,7 @@ stages:
     pool:
       vmImage: $(vmImageName)
     steps:
+    - checkout: self
     - task: Docker@2
       displayName: Build and push an image to container registry
       inputs:
