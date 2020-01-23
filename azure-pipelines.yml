@@ -7,8 +7,6 @@ trigger:
 
 resources:
 - repo: self
-  checkoutOptions:
-    submodules: true
 
 variables:
 
@@ -22,6 +20,8 @@ variables:
 
   # Agent VM image name
   vmImageName: 'ubuntu-latest'
+  
+  submodules: true
   
 
 stages:
