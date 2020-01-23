@@ -11,9 +11,6 @@ resources:
     checkoutOptions:
       submodules: true
 
-steps:
-- checkout: self
-
 variables:
 
   # Container registry service connection established during pipeline creation
@@ -36,6 +33,7 @@ stages:
     pool:
       vmImage: $(vmImageName)
     steps:
+    - checkout: self
     - task: Docker@2
       displayName: Build and push an image to container registry
       inputs:
