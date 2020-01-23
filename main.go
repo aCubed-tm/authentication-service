@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	pb "github.com/acubed-tm/authentication-service/proto"
+	pb "github.com/acubed-tm/authentication-service/protofiles"
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
 )
