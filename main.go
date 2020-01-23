@@ -15,7 +15,13 @@ const port = ":50551"
 
 type server struct{}
 
-func (*server) Login(_ context.Context, req *pb.LoginRequest) (*pb.LoginReply, error) {
+func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply, error) {
+	ret, err := GetUserByEmail(ctx, "john.doe@mail.be")
+	if err != nil {
+		log.Printf("Error: %v", err)
+	} else {
+		log.Printf("ret: %v", ret)
+	}
 	return &pb.LoginReply{Success: true}, nil
 }
 
