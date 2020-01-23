@@ -8,50 +8,53 @@ import (
 	"time"
 
 	pb "github.com/acubed-tm/authentication-service/proto"
-	grpc "google.golang.org/grpc"
+	"google.golang.org/grpc"
 )
 
 const port = ":50551"
 
-type server struct {
-	pb.UnimplementedTestServiceServer
+type server struct{}
+
+func (*server) Login(_ context.Context, req *pb.LoginRequest) (*pb.LoginReply, error) {
+	return &pb.LoginReply{Success: true}, nil
 }
 
 func main() {
-	is_client := len(os.Args[1:]) == 1 && os.Args[1:][0] == "client"
+	isClient := len(os.Args[1:]) == 1 && os.Args[1:][0] == "client"
 
-	if is_client {
-		run_server()
+	if isClient {
+		runServer()
 	} else {
-		run_client()
+		runClient()
 	}
 }
 
-func run_client() {
+func runClient() {
 	conn, err := grpc.Dial("localhost"+port, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
+	//noinspection GoUnhandledErrorResult
 	defer conn.Close()
-	c := pb.NewTestServiceClient(conn)
+	c := pb.NewLoginServiceClient(conn)
 
 	// Contact the server and print out its response.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, err = c.Test(ctx, &pb.TestRequest{})
+	resp, err := c.Login(ctx, &pb.LoginRequest{})
 	if err != nil {
 		log.Fatalf("could not greet: %v", err)
 	}
-	log.Printf("Greeting")
+	log.Printf("Login success: %v", resp.Success)
 }
 
-func run_server() {
+func runServer() {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterTestServiceServer(s, &server{})
+	pb.RegisterLoginServiceServer(s, &server{})
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
 	}
