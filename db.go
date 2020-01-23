@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"google.golang.org/grpc"
@@ -26,33 +26,24 @@ func newClient() *dgo.Dgraph {
 	)
 }
 
-func setup(c *dgo.Dgraph) {
-	// Install a schema into dgraph. Accounts have a `name` and a `balance`.
-	_ = c.Alter(context.Background(), &api.Operation{
-		Schema: `
-			name: string @index(term) .
-			balance: int .
-		`,
-	})
-}
-
-func GetUserByEmail(ctx context.Context, email string) (string, error) {
+func GetPasswordByEmail(ctx context.Context, email string) (string, error) {
 	c := newClient()
-	txn := c.NewTxn()
-	defer txn.Discard(ctx)
 
-	// TODO: injection vuln!!
-	q := fmt.Sprintf(`
-		{
-			account {
-				email(func: eq(address, "%v")) {
-					address
+	variables := map[string]string{"$email": email}
+	q := `
+		query x($email: string){
+			email(func: eq(emailAddress, $email)) {
+				emailAddress
+				~email {
+					password
 				}
-				password
 			}
 		}
-	`, email)
-	resp, err := txn.Query(context.Background(), q)
+	`
+
+	resp, err := c.NewTxn().QueryWithVars(ctx, q, variables)
+	// defer txn.Discard(ctx)
+	// resp, err := txn.Query(context.Background(), q)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -61,16 +52,20 @@ func GetUserByEmail(ctx context.Context, email string) (string, error) {
 	// we can manipulate the data.
 	var decode struct {
 		All []struct {
-			Password string
-			Email []struct {
-				address string
-			}
-		}
+			Address string `json:"emailAddress"`
+			User    []struct {
+				Password string `json:"password"`
+			} `json:"~email"`
+		} `json:"email"`
 	}
+	log.Println("JSON: " + string(resp.GetJson()))
 	if err := json.Unmarshal(resp.GetJson(), &decode); err != nil {
 		return "", err
 	}
 
-	// TODO: unconditional index
-	return decode.All[0].Password, nil
+	if len(decode.All) == 0 {
+		return "", errors.New("couldn't find email")
+	}
+
+	return decode.All[0].User[0].Password, nil
 }

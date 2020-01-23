@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net"
 	"os"
@@ -16,22 +17,28 @@ const port = ":50551"
 type server struct{}
 
 func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply, error) {
-	ret, err := GetUserByEmail(ctx, "john.doe@mail.be")
+
+	ret, err := GetPasswordByEmail(ctx, req.Email)
 	if err != nil {
-		log.Printf("Error: %v", err)
+		return nil, err
 	} else {
 		log.Printf("ret: %v", ret)
 	}
-	return &pb.LoginReply{Success: true}, nil
+	// TODO: Hashing!!
+	success := req.Password == ret
+	if !success {
+		return nil, errors.New("incorrect password")
+	}
+	return &pb.LoginReply{Success: success}, nil
 }
 
 func main() {
 	isClient := len(os.Args[1:]) == 1 && os.Args[1:][0] == "client"
 
 	if isClient {
-		runServer()
-	} else {
 		runClient()
+	} else {
+		runServer()
 	}
 }
 
@@ -47,9 +54,9 @@ func runClient() {
 	// Contact the server and print out its response.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	resp, err := c.Login(ctx, &pb.LoginRequest{})
+	resp, err := c.Login(ctx, &pb.LoginRequest{Email: "john.doe@mail.be", Password: "test123"})
 	if err != nil {
-		log.Fatalf("could not greet: %v", err)
+		log.Fatalf("could not log in: %v", err)
 	}
 	log.Printf("Login success: %v", resp.Success)
 }
