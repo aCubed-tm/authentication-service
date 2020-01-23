@@ -7,7 +7,8 @@ trigger:
 
 resources:
 - repo: self
-- submodules: true
+  checkoutOptions:
+    submodules: true
 
 variables:
 
