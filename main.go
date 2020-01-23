@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"time"
 
 	pb "github.com/acubed-tm/authentication-service/proto"
+	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
 )
 
@@ -17,19 +19,19 @@ const port = ":50551"
 type server struct{}
 
 func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply, error) {
-
 	ret, err := GetPasswordByEmail(ctx, req.Email)
 	if err != nil {
 		return nil, err
 	} else {
 		log.Printf("ret: %v", ret)
 	}
-	// TODO: Hashing!!
-	success := req.Password == ret
-	if !success {
-		return nil, errors.New("incorrect password")
+
+	bcryptErr := bcrypt.CompareHashAndPassword([]byte(ret), []byte(req.Password))
+	if bcryptErr != nil {
+		return nil, errors.New(fmt.Sprintf("incorrect password, %v", bcryptErr))
 	}
-	return &pb.LoginReply{Success: success}, nil
+
+	return &pb.LoginReply{Success: true}, nil
 }
 
 func main() {
