@@ -3,13 +3,12 @@
 # https://docs.microsoft.com/azure/devops/pipelines/languages/docker
 
 trigger:
-- master
+  - master
 
 resources:
 - repo: self
 
 variables:
-
   # Container registry service connection established during pipeline creation
   dockerRegistryServiceConnection: '76d03cc6-dafd-4cc9-93fc-684cf75e6689'
   imageRepository: 'authenticationservice'
@@ -42,14 +41,15 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(tag)
+
           
-    - upload: manifests
-      artifact: manifests
+          - upload: manifests
+            artifact: manifests
 
-- stage: Deploy
-  displayName: Deploy stage
-  dependsOn: Build
-
+  - stage: Deploy
+    displayName: Deploy stage
+    dependsOn: Build
+    
   jobs:
   - deployment: Deploy
     displayName: Deploy
@@ -78,3 +78,4 @@ stages:
                 $(imagePullSecret)
               containers: |
                 $(containerRegistry)/$(imageRepository):$(tag)
+
