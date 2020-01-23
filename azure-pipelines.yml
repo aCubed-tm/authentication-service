@@ -6,7 +6,13 @@ trigger:
 - master
 
 resources:
-- repo: self
+  repositories:
+  - repository: self
+    checkoutOptions:
+      submodules: true
+
+steps:
+- checkout: self
 
 variables:
 
@@ -19,10 +25,7 @@ variables:
   imagePullSecret: 'acubedcr2081e82b-auth'
 
   # Agent VM image name
-  vmImageName: 'ubuntu-latest'
-  
-  submodules: true
-  
+  vmImageName: 'ubuntu-latest'  
 
 stages:
 - stage: Build
