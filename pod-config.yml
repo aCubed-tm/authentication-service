@@ -2,6 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
     name: authenticationms
+    namespace: acubed
 spec:
     type: LoadBalancer
     ports:
@@ -12,7 +13,8 @@ spec:
 apiVersion : apps/v1beta1
 kind: Deployment
 metadata:
-  name: authenticationms 
+    name: authenticationms 
+    namespace: acubed
 spec:
   replicas: 1
   template:
@@ -25,3 +27,5 @@ spec:
           image: acubedcr.azurecr.io/authenticationms:buddy
           ports:
           - containerPort: 8080
+      imagePullSecrets: 
+          - name: 'acubedcr8786ba3e-auth'
