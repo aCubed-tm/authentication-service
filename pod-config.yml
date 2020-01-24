@@ -1,27 +1,27 @@
 apiVersion: v1
 kind: Service
 metadata:
-    name: authenticationservice
+    name: authenticationms
 spec:
     type: LoadBalancer
     ports:
     - port: 8080 
     selector:
-        app: authenticationservice
+        app: authenticationms
 ---
 apiVersion : apps/v1beta1
 kind: Deployment
 metadata:
-  name: authenticationservice 
+  name: authenticationms 
 spec:
   replicas: 1
   template:
     metadata:
       labels:
-        app: authenticationservice 
+        app: authenticationms 
     spec:
       containers:
-        - name: authenticationservice 
-          image: acubedcr.azurecr.io/authenticationservice:buddy
+        - name: authenticationms 
+          image: acubedcr.azurecr.io/authenticationms:buddy
           ports:
           - containerPort: 8080
