@@ -3,3 +3,11 @@ kind: Service
 metadata:
   name: authentication-service
   namespace: acubed
+spec:
+  clusterIP: 10.0.165.177
+  externalTrafficPolicy: Cluster
+  ports:
+  - nodePort: 32266
+    port: 50551
+    protocol: TCP
+    targetPort: 50551
