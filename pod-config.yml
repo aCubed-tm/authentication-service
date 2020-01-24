@@ -5,7 +5,6 @@ metadata:
   namespace: acubed
 spec:
   clusterIP: 10.0.165.177
-  externalTrafficPolicy: Cluster
   ports:
   - port: 50551
     protocol: TCP
