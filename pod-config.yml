@@ -24,6 +24,7 @@ spec:
     spec:
       containers:
         - name: authenticationms 
+          imagePullPolicy: Always
           image: acubedcr.azurecr.io/authenticationms:buddy
           ports:
           - containerPort: 50551
