@@ -10,8 +10,7 @@ import (
 	"log"
 )
 
-// TODO: should use some discovery mechanism
-const databaseUrl = "51.105.216.241:9080"
+const databaseUrl = "my-release-dgraph-alpha.acubed:9080"
 
 func newClient() *dgo.Dgraph {
 	// Dial a gRPC connection. The address to dial to can be configured when
