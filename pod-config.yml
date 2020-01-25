@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: authenticationms 
-          image: acubedcr.azurecr.io/authenticationms:buddy
+          image: acubedcr.azurecr.io/authenticationms:${BUDDY_EXECUTION_PULL_REQUEST_ID}
           ports:
           - containerPort: 50551
       imagePullSecrets: 
