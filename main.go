@@ -23,7 +23,7 @@ func (*server) IsEmailRegistered(ctx context.Context, req *pb.IsEmailRegisteredR
 	if err != nil {
 		return nil, err
 	} else {
-		return &pb.IsEmailRegisteredReply{IsRegistered:true}, nil
+		return &pb.IsEmailRegisteredReply{IsRegistered: true}, nil
 	}
 }
 
@@ -73,13 +73,16 @@ func runClient() {
 }
 
 func runServer() {
+	log.Print("Starting server")
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
 	pb.RegisterLoginServiceServer(s, &server{})
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
+	for {
+		if err := s.Serve(lis); err != nil {
+			log.Fatalf("Failed to serve: %v", err)
+		}
 	}
 }
