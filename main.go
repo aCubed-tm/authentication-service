@@ -17,7 +17,7 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterLoginServiceServer(s, &server{})
+	pb.RegisterAuthServiceServer(s, &server{})
 	for {
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("Failed to serve: %v", err)
