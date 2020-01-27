@@ -18,6 +18,15 @@ const port = ":50551"
 
 type server struct{}
 
+func (*server) IsEmailRegistered(ctx context.Context, req *pb.IsEmailRegisteredRequest) (*pb.IsEmailRegisteredReply, error) {
+	_, err := GetEmail(ctx, req.Email)
+	if err != nil {
+		return nil, err
+	} else {
+		return &pb.IsEmailRegisteredReply{IsRegistered: true}, nil
+	}
+}
+
 func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply, error) {
 	ret, err := GetPasswordByEmail(ctx, req.Email)
 	if err != nil {
@@ -64,13 +73,16 @@ func runClient() {
 }
 
 func runServer() {
+	log.Print("Starting server")
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
 	pb.RegisterLoginServiceServer(s, &server{})
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
+	for {
+		if err := s.Serve(lis); err != nil {
+			log.Fatalf("Failed to serve: %v", err)
+		}
 	}
 }
