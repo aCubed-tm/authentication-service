@@ -18,6 +18,15 @@ const port = ":50551"
 
 type server struct{}
 
+func (*server) IsEmailRegistered(ctx context.Context, req *pb.IsEmailRegisteredRequest) (*pb.IsEmailRegisteredReply, error) {
+	_, err := GetEmail(ctx, req.Email)
+	if err != nil {
+		return nil, err
+	} else {
+		return &pb.IsEmailRegisteredReply{IsRegistered:true}, nil
+	}
+}
+
 func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply, error) {
 	ret, err := GetPasswordByEmail(ctx, req.Email)
 	if err != nil {
