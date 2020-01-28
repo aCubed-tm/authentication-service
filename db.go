@@ -148,7 +148,7 @@ func ChangePasswordForEmail(ctx context.Context, email string, password string) 
 			email(func: eq(emailAddress, $email)) {
 				emailAddress
 				~email {
-					Uid
+					uid
 					password
 				}
 			}
@@ -165,7 +165,7 @@ func ChangePasswordForEmail(ctx context.Context, email string, password string) 
 		All []struct {
 			Address string `json:"emailAddress"`
 			User    []struct {
-				Uid      string `json:"Uid"`
+				Uid      string `json:"uid"`
 				Password string `json:"password"`
 			} `json:"~email"`
 		} `json:"email"`
@@ -186,8 +186,7 @@ func ChangePasswordForEmail(ctx context.Context, email string, password string) 
 		log.Fatal(err)
 	}
 
-	log.Printf("new json: %v", string(out))
-	_, err = txn.Mutate(context.Background(), &api.Mutation{SetJson: out})
+	_, err = txn.Mutate(context.Background(), &api.Mutation{SetJson: out, CommitNow: true})
 	if err != nil {
 		return err
 	}
