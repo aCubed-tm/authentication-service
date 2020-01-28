@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const password_cost = 12
+const passwordCost = 12
 
 type server struct{}
 
@@ -43,7 +43,7 @@ func (*server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Regis
 	}
 
 	// NOTE: could also remove verification token
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(pass), password_cost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(pass), passwordCost)
 	if err != nil {
 		return nil, err
 	}

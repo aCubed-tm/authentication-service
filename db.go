@@ -39,7 +39,7 @@ func GetEmail(ctx context.Context, email string) (string, error) {
 
 	resp, err := c.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	var decode struct {
@@ -74,7 +74,7 @@ func GetEmailByVerificationToken(ctx context.Context, token string) (string, err
 
 	resp, err := c.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	var decode struct {
@@ -114,7 +114,7 @@ func GetPasswordByEmail(ctx context.Context, email string) (string, error) {
 	// defer txn.Discard(ctx)
 	// resp, err := txn.Query(context.Background(), q)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	// After we get the balances, we have to decode them into structs so that
@@ -183,7 +183,7 @@ func ChangePasswordForEmail(ctx context.Context, email string, password string) 
 
 	out, err := json.Marshal(decode.All[0].User[0])
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	_, err = txn.Mutate(context.Background(), &api.Mutation{SetJson: out, CommitNow: true})

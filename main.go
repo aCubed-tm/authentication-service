@@ -20,7 +20,7 @@ func main() {
 	pb.RegisterAuthServiceServer(s, &server{})
 	for {
 		if err := s.Serve(lis); err != nil {
-			log.Fatalf("Failed to serve: %v", err)
+			log.Printf("Failed to serve with error: %v", err)
 		}
 	}
 }
