@@ -85,3 +85,24 @@ func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply,
 
 	return &pb.LoginReply{Token: tokenString}, nil
 }
+
+func (*server) IsTokenValid(_ context.Context, req *pb.IsTokenValidRequest) (*pb.IsTokenValidReply, error) {
+	type JwtClaims struct {
+		Uuid string `json:"uuid"`
+		jwt.StandardClaims
+	}
+
+	token, err := jwt.ParseWithClaims(req.Token, &JwtClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(jwtSecret), nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if _, ok := token.Claims.(*JwtClaims); ok {
+		return &pb.IsTokenValidReply{IsValid: token.Valid && token.Method.Alg() == "HS256"}, nil
+	} else {
+		return nil, err
+	}
+}
