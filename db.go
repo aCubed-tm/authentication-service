@@ -139,6 +139,46 @@ func GetPasswordByEmail(ctx context.Context, email string) (string, error) {
 	return decode.All[0].User[0].Password, nil
 }
 
+func GetUuidByEmail(ctx context.Context, email string) (string, error) {
+	c := newClient()
+
+	variables := map[string]string{"$email": email}
+	q := `
+		query x($email: string){
+			email(func: eq(emailAddress, $email)) {
+				emailAddress
+				~email {
+					uuid
+				}
+			}
+		}
+	`
+
+	resp, err := c.NewTxn().QueryWithVars(ctx, q, variables)
+	if err != nil {
+		return "", err
+	}
+
+	var decode struct {
+		All []struct {
+			Address string `json:"emailAddress"`
+			User    []struct {
+				Uuid string `json:"uuid"`
+			} `json:"~email"`
+		} `json:"email"`
+	}
+	log.Println("JSON: " + string(resp.GetJson()))
+	if err := json.Unmarshal(resp.GetJson(), &decode); err != nil {
+		return "", err
+	}
+
+	if len(decode.All) == 0 {
+		return "", errors.New("couldn't find email")
+	}
+
+	return decode.All[0].User[0].Uuid, nil
+}
+
 func ChangePasswordForEmail(ctx context.Context, email string, password string) error {
 	c := newClient()
 
