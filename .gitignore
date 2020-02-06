@@ -17,4 +17,4 @@
 .env
 
 # Repo-specific artifact
-edge
+authentication-service
