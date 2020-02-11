@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const databaseUrl = "my-release-dgraph-alpha.acubed:9080"
+const databaseUrl = "dgraph-public:9080"
 
 func newClient() *dgo.Dgraph {
 	// Dial a gRPC connection. The address to dial to can be configured when
