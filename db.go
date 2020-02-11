@@ -8,6 +8,7 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"google.golang.org/grpc"
 	"log"
+	"time"
 )
 
 const databaseUrl = "my-release-dgraph-alpha.acubed:9080"
@@ -59,40 +60,100 @@ func GetEmail(ctx context.Context, email string) (string, error) {
 	return decode.All[0].Address, nil
 }
 
-func GetEmailByVerificationToken(ctx context.Context, token string) (string, error) {
+func VerifyEmailByToken(ctx context.Context, token string, verificationTime time.Time) error {
 	c := newClient()
 
 	variables := map[string]string{"$token": token}
 	q := `
 		query x($token: string){
 			email(func: eq(verificationToken, $token)) {
+				uid
 				emailAddress
 				verificationToken
+				verifiedAt
+			}
+		}
+	`
+
+	txn := c.NewTxn()
+	resp, err := txn.QueryWithVars(ctx, q, variables)
+	if err != nil {
+		return err
+	}
+
+	var decode struct {
+		All []struct {
+			Uid        string    `json:"uid"`
+			Address    string    `json:"emailAddress"`
+			Token      string    `json:"verificationToken"`
+			VerifiedAt time.Time `json:"verifiedAt"`
+		} `json:"email"`
+	}
+	log.Println("JSON: " + string(resp.GetJson()))
+	if err := json.Unmarshal(resp.GetJson(), &decode); err != nil {
+		return err
+	}
+
+	if len(decode.All) == 0 {
+		return errors.New("couldn't find token")
+	}
+
+	decode.All[0].VerifiedAt = verificationTime
+	out, err := json.Marshal(decode.All[0])
+	if err != nil {
+		return err
+	}
+
+	_, err = txn.Mutate(context.Background(), &api.Mutation{SetJson: out, CommitNow: true})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func GetAllEmailsByUuid(ctx context.Context, uuid string) ([]string, error) {
+	c := newClient()
+
+	variables := map[string]string{"$uuid": uuid}
+	q := `
+		query x($uuid: string){
+			account(func: eq(uuid, $uuid)) {
+				uuid
+				email {
+					emailAddress
+				}
 			}
 		}
 	`
 
 	resp, err := c.NewTxn().QueryWithVars(ctx, q, variables)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var decode struct {
 		All []struct {
-			Address string `json:"emailAddress"`
-			Token   string `json:"verificationToken"`
-		} `json:"email"`
+			Uuid  string `json:"uuid"`
+			Email []struct {
+				Address string `json:"emailAddress"`
+			} `json:"email"`
+		} `json:"account"`
 	}
 	log.Println("JSON: " + string(resp.GetJson()))
 	if err := json.Unmarshal(resp.GetJson(), &decode); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if len(decode.All) == 0 {
-		return "", errors.New("couldn't find token")
+		return nil, errors.New("couldn't find uuid")
 	}
 
-	return decode.All[0].Address, nil
+	ret := make([]string, len(decode.All[0].Email))
+	for i, v := range decode.All[0].Email {
+		ret[i] = v.Address
+	}
+	return ret, nil
 }
 
 func GetPasswordByEmail(ctx context.Context, email string) (string, error) {
@@ -137,6 +198,54 @@ func GetPasswordByEmail(ctx context.Context, email string) (string, error) {
 	}
 
 	return decode.All[0].User[0].Password, nil
+}
+
+func GetInviteOrganizationsByEmail(ctx context.Context, email string) ([]string, error) {
+	c := newClient()
+
+	variables := map[string]string{"$email": email}
+	q := `
+		query x($email: string){
+			email(func: eq(emailAddress, $email)) {
+				emailAddress
+				~email { // invite
+					organisation {
+						uuid
+					}
+				}
+			}
+		}
+	`
+
+	resp, err := c.NewTxn().QueryWithVars(ctx, q, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	var decode struct {
+		All []struct {
+			Address string `json:"emailAddress"`
+			Invite  []struct {
+				Organisation struct {
+					Uuid string `json:"uuid"`
+				}
+			} `json:"~email"`
+		} `json:"email"`
+	}
+	log.Println("JSON: " + string(resp.GetJson()))
+	if err := json.Unmarshal(resp.GetJson(), &decode); err != nil {
+		return nil, err
+	}
+
+	if len(decode.All) == 0 {
+		return nil, errors.New("couldn't find uuid")
+	}
+
+	var invites []string
+	for _, inv := range decode.All[0].Invite {
+		invites = append(invites, inv.Organisation.Uuid)
+	}
+	return invites, nil
 }
 
 func GetUuidByEmail(ctx context.Context, email string) (string, error) {
@@ -222,6 +331,77 @@ func ChangePasswordForEmail(ctx context.Context, email string, password string) 
 	decode.All[0].User[0].Password = password
 
 	out, err := json.Marshal(decode.All[0].User[0])
+	if err != nil {
+		return err
+	}
+
+	_, err = txn.Mutate(context.Background(), &api.Mutation{SetJson: out, CommitNow: true})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Remove tokens from database. Removes all tokens if token parameter is "-"
+func RemoveJwtTokenByToken(ctx context.Context, token string, dropAll bool) error {
+	c := newClient()
+
+	variables := map[string]string{"$token": token}
+	q := `
+		query x($token: string) {
+			user {
+				uid
+				JWTToken(func: eq(token, $token)) {
+					uid
+					token
+				}
+			}
+		}
+	`
+
+	txn := c.NewTxn()
+	resp, err := txn.QueryWithVars(ctx, q, variables)
+	if err != nil {
+		return err
+	}
+
+	var decode struct {
+		Users []struct {
+			Uid       string `json:"uid"`
+			JWTTokens []struct {
+				Uid   string `json:"uid"`
+				Token string `json:"token"`
+			} `json:"JWTToken"`
+		} `json:"user"`
+	}
+	log.Println("JSON: " + string(resp.GetJson()))
+	if err := json.Unmarshal(resp.GetJson(), &decode); err != nil {
+		return err
+	}
+
+	if len(decode.Users) == 0 {
+		return errors.New("couldn't find users")
+	}
+
+	// note: should remove token nodes
+	tokens := decode.Users[0].JWTTokens
+
+	if !dropAll {
+		var idx int
+		for i, t := range tokens {
+			if t.Token == token {
+				idx = i
+				break
+			}
+		}
+		tokens = append(tokens[:idx], tokens[idx+1:]...)
+	} else {
+		tokens = nil
+	}
+	decode.Users[0].JWTTokens = tokens
+
+	out, err := json.Marshal(decode.Users[0])
 	if err != nil {
 		return err
 	}

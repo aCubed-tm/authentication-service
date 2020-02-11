@@ -8,7 +8,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 	"log"
-	"strings"
+	"time"
 )
 
 const passwordCost = 12
@@ -25,17 +25,32 @@ func (*server) IsEmailRegistered(ctx context.Context, req *pb.IsEmailRegisteredR
 	}
 }
 
-func (*server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterReply, error) {
-	log.Printf("Starting registration")
-	email, err := GetEmailByVerificationToken(ctx, req.VerificationToken)
+func (s *server) GetInvites(ctx context.Context, req *pb.GetInvitesRequest) (*pb.GetInvitesReply, error) {
+	accountUuid := req.AccountUuid
+	emails, err := GetAllEmailsByUuid(ctx, accountUuid)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Found email %v", email)
 
-	if !strings.EqualFold(email, req.Email) {
-		return nil, errors.New("email did not match verification token")
+	var ret []string
+	for _, email := range emails {
+		invites, err := GetInviteOrganizationsByEmail(ctx, email)
+		if err != nil {
+			return nil, err
+		}
+		for _, invite := range invites {
+			ret = append(ret, invite)
+		}
 	}
+
+	return &pb.GetInvitesReply{
+		OrganizationUuids: ret,
+	}, nil
+}
+
+func (*server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterReply, error) {
+	log.Printf("Starting registration")
+	email := req.Email
 
 	// check if already has account
 	// could reduce db calls, but we're students so who cares
@@ -54,7 +69,7 @@ func (*server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Regis
 	if err != nil {
 		return nil, err
 	} else {
-		return &pb.RegisterReply{Success: true}, nil
+		return &pb.RegisterReply{}, nil
 	}
 }
 
@@ -84,4 +99,23 @@ func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply,
 	}
 
 	return &pb.LoginReply{Token: tokenString}, nil
+}
+
+func (s *server) ActivateEmail(ctx context.Context, req *pb.ActivateEmailRequest) (*pb.ActivateEmailReply, error) {
+	verificationToken := req.Token
+	err := VerifyEmailByToken(ctx, verificationToken, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	return &pb.ActivateEmailReply{}, nil
+}
+
+func (s *server) DropSingleToken(ctx context.Context, req *pb.DropSingleTokenRequest) (*pb.DropSingleTokenReply, error) {
+	jwtToken := req.Token
+	return &pb.DropSingleTokenReply{}, RemoveJwtTokenByToken(ctx, jwtToken, true)
+}
+
+func (s *server) DropAllTokens(ctx context.Context, req *pb.DropAllTokensRequest) (*pb.DropAllTokensReply, error) {
+	jwtToken := req.Token
+	return &pb.DropAllTokensReply{}, RemoveJwtTokenByToken(ctx, jwtToken, true)
 }
