@@ -413,3 +413,62 @@ func RemoveJwtTokenByToken(ctx context.Context, token string, dropAll bool) erro
 
 	return nil
 }
+
+// Remove tokens from database. Removes all tokens if token parameter is "-"
+func AddJwtTokenToUser(ctx context.Context, uuid string, token string) error {
+	c := newClient()
+
+	variables := map[string]string{"$uuid": uuid}
+	q := `
+		query x($uuid: string) {
+			user(func: eq(uuid, $uuid)) {
+				uid
+				JWTToken {
+					uid
+					token
+				}
+			}
+		}
+	`
+
+	txn := c.NewTxn()
+	resp, err := txn.QueryWithVars(ctx, q, variables)
+	if err != nil {
+		return err
+	}
+
+	type TokenData struct {
+		Uid   string `json:"uid"`
+		Token string `json:"token"`
+	}
+	var decode struct {
+		Users []struct {
+			Uid       string      `json:"uid"`
+			JWTTokens []TokenData `json:"JWTToken"`
+		} `json:"user"`
+	}
+	log.Println("JSON: " + string(resp.GetJson()))
+	if err := json.Unmarshal(resp.GetJson(), &decode); err != nil {
+		return err
+	}
+
+	if len(decode.Users) == 0 {
+		return errors.New("couldn't find users")
+	}
+
+	decode.Users[0].JWTTokens = append(decode.Users[0].JWTTokens, TokenData{
+		Token: token,
+	})
+
+	out, err := json.Marshal(decode.Users[0])
+	if err != nil {
+		return err
+	}
+
+	_, err = txn.Mutate(context.Background(), &api.Mutation{SetJson: out, CommitNow: true})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

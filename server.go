@@ -59,7 +59,9 @@ func (*server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Regis
 		return nil, errors.New("user already has a password set")
 	}
 
-	// NOTE: could also remove verification token
+	// TODO: make sure we're invited
+	// TODO: add to orgs
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(pass), passwordCost)
 	if err != nil {
 		return nil, err
@@ -94,6 +96,11 @@ func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply,
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"uuid": uuid})
 
 	tokenString, err := token.SignedString([]byte(jwtSecret))
+	if err != nil {
+		return nil, err
+	}
+
+	err = AddJwtTokenToUser(ctx, uuid, tokenString)
 	if err != nil {
 		return nil, err
 	}
