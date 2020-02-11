@@ -5,14 +5,12 @@ import (
 	"errors"
 	"fmt"
 	pb "github.com/acubed-tm/authentication-service/protofiles"
-	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 	"log"
 	"time"
 )
 
 const passwordCost = 12
-const jwtSecret = "change me!" // TODO: move to secret!
 
 type server struct{}
 
@@ -96,9 +94,7 @@ func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply,
 		return nil, err
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"uuid": uuid})
-
-	tokenString, err := token.SignedString([]byte(jwtSecret))
+	tokenString, err := CreateToken(uuid)
 	if err != nil {
 		return nil, err
 	}
