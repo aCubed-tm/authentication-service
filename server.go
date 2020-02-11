@@ -59,8 +59,11 @@ func (*server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Regis
 		return nil, errors.New("user already has a password set")
 	}
 
-	// TODO: make sure we're invited
-	// TODO: add to orgs
+	// could save this request
+	invitations, err := GetInviteOrganizationsByEmail(ctx, email)
+	if len(invitations) == 0 {
+		return nil, errors.New("user is not invited by any organizations")
+	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(pass), passwordCost)
 	if err != nil {
