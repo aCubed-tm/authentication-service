@@ -4,35 +4,36 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	pb "github.com/acubed-tm/authentication-service/protofiles"
-	"golang.org/x/crypto/bcrypt"
 	"log"
 	"time"
+
+	pb "github.com/acubed-tm/authentication-service/protofiles"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const passwordCost = 12
 
 type server struct{}
 
-func (*server) IsEmailRegistered(ctx context.Context, req *pb.IsEmailRegisteredRequest) (*pb.IsEmailRegisteredReply, error) {
-	_, err := GetEmail(ctx, req.Email)
+func (*server) IsEmailRegistered(_ context.Context, req *pb.IsEmailRegisteredRequest) (*pb.IsEmailRegisteredReply, error) {
+	exists, err := CheckEmailExists(req.Email)
 	if err != nil {
 		return nil, err
 	} else {
-		return &pb.IsEmailRegisteredReply{IsRegistered: true}, nil
+		return &pb.IsEmailRegisteredReply{IsRegistered: exists}, nil
 	}
 }
 
-func (s *server) GetInvites(ctx context.Context, req *pb.GetInvitesRequest) (*pb.GetInvitesReply, error) {
+func (s *server) GetInvites(_ context.Context, req *pb.GetInvitesRequest) (*pb.GetInvitesReply, error) {
 	accountUuid := req.AccountUuid
-	emails, err := GetAllEmailsByUuid(ctx, accountUuid)
+	emails, err := GetAllEmailsByUuid(accountUuid)
 	if err != nil {
 		return nil, err
 	}
 
 	var ret []string
 	for _, email := range emails {
-		invites, err := GetInviteOrganizationsByEmail(ctx, email)
+		invites, err := GetInviteOrganizationsByEmail(email)
 		if err != nil {
 			return nil, err
 		}
@@ -46,19 +47,19 @@ func (s *server) GetInvites(ctx context.Context, req *pb.GetInvitesRequest) (*pb
 	}, nil
 }
 
-func (*server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterReply, error) {
+func (*server) Register(_ context.Context, req *pb.RegisterRequest) (*pb.RegisterReply, error) {
 	log.Printf("Starting registration")
 	email := req.Email
 
 	// check if already has account
 	// could reduce db calls, but we're students so who cares
-	pass, err := GetPasswordByEmail(ctx, email)
+	pass, err := GetPasswordByEmail(email)
 	if pass != "" {
 		return nil, errors.New("user already has a password set")
 	}
 
 	// could save this request
-	invitations, err := GetInviteOrganizationsByEmail(ctx, email)
+	invitations, err := GetInviteOrganizationsByEmail(email)
 	if len(invitations) == 0 {
 		return nil, errors.New("user is not invited by any organizations")
 	}
@@ -67,7 +68,7 @@ func (*server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Regis
 	if err != nil {
 		return nil, err
 	}
-	err = ChangePasswordForEmail(ctx, email, string(hashedPassword))
+	err = ChangePasswordForEmail(email, string(hashedPassword))
 
 	if err != nil {
 		return nil, err
@@ -76,8 +77,8 @@ func (*server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Regis
 	}
 }
 
-func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply, error) {
-	ret, err := GetPasswordByEmail(ctx, req.Email)
+func (*server) Login(_ context.Context, req *pb.LoginRequest) (*pb.LoginReply, error) {
+	ret, err := GetPasswordByEmail(req.Email)
 	if err != nil {
 		return nil, err
 	} else {
@@ -89,7 +90,7 @@ func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply,
 		return nil, errors.New(fmt.Sprintf("incorrect password, %v", bcryptErr))
 	}
 
-	uuid, err := GetUuidByEmail(ctx, req.Email)
+	uuid, err := GetUuidByEmail(req.Email)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +100,7 @@ func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply,
 		return nil, err
 	}
 
-	err = AddJwtTokenToUser(ctx, uuid, tokenString)
+	err = AddJwtTokenToUser(uuid, tokenString)
 	if err != nil {
 		return nil, err
 	}
@@ -107,21 +108,25 @@ func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply,
 	return &pb.LoginReply{Token: tokenString}, nil
 }
 
-func (s *server) ActivateEmail(ctx context.Context, req *pb.ActivateEmailRequest) (*pb.ActivateEmailReply, error) {
+func (s *server) ActivateEmail(_ context.Context, req *pb.ActivateEmailRequest) (*pb.ActivateEmailReply, error) {
 	verificationToken := req.Token
-	err := VerifyEmailByToken(ctx, verificationToken, time.Now())
+	err := VerifyEmailByToken(verificationToken, time.Now())
 	if err != nil {
 		return nil, err
 	}
 	return &pb.ActivateEmailReply{}, nil
 }
 
-func (s *server) DropSingleToken(ctx context.Context, req *pb.DropSingleTokenRequest) (*pb.DropSingleTokenReply, error) {
+func (s *server) DropSingleToken(_ context.Context, req *pb.DropSingleTokenRequest) (*pb.DropSingleTokenReply, error) {
 	jwtToken := req.Token
-	return &pb.DropSingleTokenReply{}, RemoveJwtTokenByToken(ctx, jwtToken, true)
+	return &pb.DropSingleTokenReply{}, DropJwtToken(jwtToken)
 }
 
-func (s *server) DropAllTokens(ctx context.Context, req *pb.DropAllTokensRequest) (*pb.DropAllTokensReply, error) {
+func (s *server) DropAllTokens(_ context.Context, req *pb.DropAllTokensRequest) (*pb.DropAllTokensReply, error) {
 	jwtToken := req.Token
-	return &pb.DropAllTokensReply{}, RemoveJwtTokenByToken(ctx, jwtToken, true)
+	parsedToken, err := DecodeToken(jwtToken)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.DropAllTokensReply{}, DropAllTokensForUuid(parsedToken.Uuid)
 }
