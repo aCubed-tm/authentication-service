@@ -16,11 +16,11 @@ const passwordCost = 12
 type server struct{}
 
 func (*server) IsEmailRegistered(_ context.Context, req *pb.IsEmailRegisteredRequest) (*pb.IsEmailRegisteredReply, error) {
-	exists, err := CheckEmailExists(req.Email)
+	uuid, err := GetUuidByEmail(req.Email)
 	if err != nil {
 		return nil, err
 	} else {
-		return &pb.IsEmailRegisteredReply{IsRegistered: exists}, nil
+		return &pb.IsEmailRegisteredReply{IsRegistered: true, AccountUuid: uuid}, nil
 	}
 }
 

@@ -51,8 +51,11 @@ func FetchStringArray(query string, variables map[string]interface{}) ([]string,
 
 		return ret, nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return ret.([]string), err
+	return ret.([]string), nil
 }
 
 func Write(query string, variables map[string]interface{}) error {
