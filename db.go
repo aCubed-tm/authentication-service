@@ -1,235 +1,115 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
-	"google.golang.org/grpc"
-	"log"
+	"time"
+
+	"github.com/neo4j/neo4j-go-driver/neo4j"
 )
 
-const databaseUrl = "my-release-dgraph-alpha.acubed:9080"
+const databaseUrl = "bolt://neo4j-public.default:7687"
+const username = "neo4j"
+const password = ""
 
-func newClient() *dgo.Dgraph {
-	// Dial a gRPC connection. The address to dial to can be configured when
-	// setting up the dgraph cluster.
-	d, err := grpc.Dial(databaseUrl, grpc.WithInsecure())
-	if err != nil {
-		log.Fatal(err)
-	}
+var driver neo4j.Driver = nil
 
-	return dgo.NewDgraphClient(
-		api.NewDgraphClient(d),
+func newSession(accessMode neo4j.AccessMode) neo4j.Session {
+	var (
+		err     error
+		session neo4j.Session
 	)
+
+	if driver == nil {
+		driver, err = neo4j.NewDriver(databaseUrl, neo4j.BasicAuth(username, password, ""))
+		if err != nil {
+			panic(err.Error())
+		}
+	}
+
+	session, err = driver.Session(accessMode)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return session
 }
 
-func GetEmail(ctx context.Context, email string) (string, error) {
-	c := newClient()
-
-	variables := map[string]string{"$email": email}
-	q := `
-		query x($email: string){
-			email(func: eq(emailAddress, $email)) {
-				emailAddress
-			}
-		}
-	`
-
-	resp, err := c.NewTxn().QueryWithVars(ctx, q, variables)
+func _(email string) (bool, error) { // CheckEmailExists
+	query := "MATCH (e:Email {emailAddress: {email}}) RETURN COUNT(e)"
+	variables := map[string]interface{}{"email": email}
+	count, err := FetchSingle(query, variables)
 	if err != nil {
-		return "", err
+		return false, err
 	}
-
-	var decode struct {
-		All []struct {
-			Address string `json:"emailAddress"`
-		} `json:"email"`
-	}
-	log.Println("JSON: " + string(resp.GetJson()))
-	if err := json.Unmarshal(resp.GetJson(), &decode); err != nil {
-		return "", err
-	}
-
-	if len(decode.All) == 0 {
-		return "", errors.New("couldn't find email")
-	}
-
-	return decode.All[0].Address, nil
+	return count.(int64) > 0, nil
 }
 
-func GetEmailByVerificationToken(ctx context.Context, token string) (string, error) {
-	c := newClient()
-
-	variables := map[string]string{"$token": token}
-	q := `
-		query x($token: string){
-			email(func: eq(verificationToken, $token)) {
-				emailAddress
-				verificationToken
-			}
-		}
-	`
-
-	resp, err := c.NewTxn().QueryWithVars(ctx, q, variables)
-	if err != nil {
-		return "", err
-	}
-
-	var decode struct {
-		All []struct {
-			Address string `json:"emailAddress"`
-			Token   string `json:"verificationToken"`
-		} `json:"email"`
-	}
-	log.Println("JSON: " + string(resp.GetJson()))
-	if err := json.Unmarshal(resp.GetJson(), &decode); err != nil {
-		return "", err
-	}
-
-	if len(decode.All) == 0 {
-		return "", errors.New("couldn't find token")
-	}
-
-	return decode.All[0].Address, nil
+func VerifyEmailByToken(token string, verificationTime time.Time) error {
+	query := "MATCH (e:Email {verificationToken: {token}}) SET e.verifiedAt = {date}"
+	variables := map[string]interface{}{"token": token, "date": verificationTime.Unix()}
+	return Write(query, variables)
 }
 
-func GetPasswordByEmail(ctx context.Context, email string) (string, error) {
-	c := newClient()
-
-	variables := map[string]string{"$email": email}
-	q := `
-		query x($email: string){
-			email(func: eq(emailAddress, $email)) {
-				emailAddress
-				~email {
-					password
-				}
-			}
-		}
-	`
-
-	resp, err := c.NewTxn().QueryWithVars(ctx, q, variables)
-	// defer txn.Discard(ctx)
-	// resp, err := txn.Query(context.Background(), q)
-	if err != nil {
-		return "", err
-	}
-
-	// After we get the balances, we have to decode them into structs so that
-	// we can manipulate the data.
-	var decode struct {
-		All []struct {
-			Address string `json:"emailAddress"`
-			User    []struct {
-				Password string `json:"password"`
-			} `json:"~email"`
-		} `json:"email"`
-	}
-	log.Println("JSON: " + string(resp.GetJson()))
-	if err := json.Unmarshal(resp.GetJson(), &decode); err != nil {
-		return "", err
-	}
-
-	if len(decode.All) == 0 {
-		return "", errors.New("couldn't find email")
-	}
-
-	return decode.All[0].User[0].Password, nil
+func GetAllEmailsByUuid(uuid string) ([]string, error) {
+	query := "MATCH (:Account {uuid: {uuid}})--(e:Email) RETURN e.emailAddress"
+	variables := map[string]interface{}{"uuid": uuid}
+	return FetchStringArray(query, variables)
 }
 
-func GetUuidByEmail(ctx context.Context, email string) (string, error) {
-	c := newClient()
-
-	variables := map[string]string{"$email": email}
-	q := `
-		query x($email: string){
-			email(func: eq(emailAddress, $email)) {
-				emailAddress
-				~email {
-					uuid
-				}
-			}
-		}
-	`
-
-	resp, err := c.NewTxn().QueryWithVars(ctx, q, variables)
+func GetPasswordByEmail(email string) (string, error) {
+	query := "MATCH (:Email {emailAddress: {email}})--(a:Account) RETURN a.password"
+	variables := map[string]interface{}{"email": email}
+	password, err := FetchSingle(query, variables)
 	if err != nil {
 		return "", err
 	}
-
-	var decode struct {
-		All []struct {
-			Address string `json:"emailAddress"`
-			User    []struct {
-				Uuid string `json:"uuid"`
-			} `json:"~email"`
-		} `json:"email"`
+	if password == nil { // can't return nil strings
+		return "", nil
 	}
-	log.Println("JSON: " + string(resp.GetJson()))
-	if err := json.Unmarshal(resp.GetJson(), &decode); err != nil {
-		return "", err
-	}
-
-	if len(decode.All) == 0 {
-		return "", errors.New("couldn't find email")
-	}
-
-	return decode.All[0].User[0].Uuid, nil
+	return password.(string), nil
 }
 
-func ChangePasswordForEmail(ctx context.Context, email string, password string) error {
-	c := newClient()
+func GetInviteOrganizationsByEmail(email string) ([]string, error) {
+	query := "MATCH (:Email{emailAddress: {email}})<-[:INVITED]-(o:Organisation) RETURN o.uuid"
+	variables := map[string]interface{}{"email": email}
+	return FetchStringArray(query, variables)
+}
 
-	variables := map[string]string{"$email": email}
-	q := `
-		query x($email: string){
-			email(func: eq(emailAddress, $email)) {
-				emailAddress
-				~email {
-					uid
-					password
-				}
-			}
-		}
-	`
-
-	txn := c.NewTxn()
-	resp, err := txn.QueryWithVars(ctx, q, variables)
+func GetUuidByEmail(email string) (string, error) {
+	query := "MATCH (:Email{emailAddress: {email}})<-[:HAS_EMAIL]-(a:Account) RETURN a.uuid"
+	variables := map[string]interface{}{"email": email}
+	uuid, err := FetchSingle(query, variables)
 	if err != nil {
-		return err
+		return "", err
 	}
+	return uuid.(string), nil
+}
 
-	var decode struct {
-		All []struct {
-			Address string `json:"emailAddress"`
-			User    []struct {
-				Uid      string `json:"uid"`
-				Password string `json:"password"`
-			} `json:"~email"`
-		} `json:"email"`
-	}
-	log.Println("JSON: " + string(resp.GetJson()))
-	if err := json.Unmarshal(resp.GetJson(), &decode); err != nil {
-		return err
-	}
+func CreateAccount(email, password, uuid string) error {
+	query := "MATCH (x:Email{emailAddress:{email}}) CREATE (x)<-[:HAS_EMAIL]-(:Account{password: {password}, active: true, uuid: {uuid}})"
+	variables := map[string]interface{}{"email": email, "password": password, "uuid": uuid}
+	return Write(query, variables)
+}
 
-	if len(decode.All) == 0 {
-		return errors.New("couldn't find email")
-	}
+func _(email string, password string) error { // ChangePasswordForEmail
+	query := "MATCH (:Email {emailAddress: {email}})<-[:HAS_EMAIL]-(a:Account) SET a.password = {password}"
+	variables := map[string]interface{}{"email": email, "password": password}
+	return Write(query, variables)
+}
 
-	decode.All[0].User[0].Password = password
+func DropJwtToken(token string) error {
+	query := "MATCH (t:JWTToken{token: {token}}) DETACH DELETE t"
+	variables := map[string]interface{}{"token": token}
+	return Write(query, variables)
+}
 
-	out, err := json.Marshal(decode.All[0].User[0])
-	if err != nil {
-		return err
-	}
+func DropAllTokensForUuid(uuid string) error {
+	query := "MATCH (:Account {uuid: {uuid}})-[:HAS_TOKEN]->(t:JWTToken) DETACH DELETE t"
+	variables := map[string]interface{}{"uuid": uuid}
+	return Write(query, variables)
+}
 
-	_, err = txn.Mutate(context.Background(), &api.Mutation{SetJson: out, CommitNow: true})
-	if err != nil {
-		return err
-	}
-
-	return nil
+func AddJwtTokenToUser(uuid string, token string) error {
+	query := "MATCH (a:Account {uuid: {uuid}}) CREATE (a)-[:HAS_TOKEN]->(t:JWTToken{token: {token}})"
+	variables := map[string]interface{}{"token": token, "uuid": uuid}
+	return Write(query, variables)
 }

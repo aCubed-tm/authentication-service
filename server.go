@@ -4,62 +4,83 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	pb "github.com/acubed-tm/authentication-service/protofiles"
-	"github.com/dgrijalva/jwt-go"
-	"golang.org/x/crypto/bcrypt"
+	googleUuid "github.com/google/uuid"
 	"log"
-	"strings"
+	"time"
+
+	pb "github.com/acubed-tm/authentication-service/protofiles"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const passwordCost = 12
-const jwtSecret = "change me!" // TODO: move to secret!
 
 type server struct{}
 
-func (*server) IsEmailRegistered(ctx context.Context, req *pb.IsEmailRegisteredRequest) (*pb.IsEmailRegisteredReply, error) {
-	_, err := GetEmail(ctx, req.Email)
+func (*server) IsEmailRegistered(_ context.Context, req *pb.IsEmailRegisteredRequest) (*pb.IsEmailRegisteredReply, error) {
+	uuid, err := GetUuidByEmail(req.Email)
 	if err != nil {
 		return nil, err
 	} else {
-		return &pb.IsEmailRegisteredReply{IsRegistered: true}, nil
+		return &pb.IsEmailRegisteredReply{IsRegistered: true, AccountUuid: uuid}, nil
 	}
 }
 
-func (*server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterReply, error) {
-	log.Printf("Starting registration")
-	email, err := GetEmailByVerificationToken(ctx, req.VerificationToken)
+func (s *server) GetInvites(_ context.Context, req *pb.GetInvitesRequest) (*pb.GetInvitesReply, error) {
+	accountUuid := req.AccountUuid
+	emails, err := GetAllEmailsByUuid(accountUuid)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Found email %v", email)
 
-	if !strings.EqualFold(email, req.Email) {
-		return nil, errors.New("email did not match verification token")
+	var ret []string
+	for _, email := range emails {
+		invites, err := GetInviteOrganizationsByEmail(email)
+		if err != nil {
+			return nil, err
+		}
+		for _, invite := range invites {
+			ret = append(ret, invite)
+		}
 	}
+
+	return &pb.GetInvitesReply{
+		OrganizationUuids: ret,
+	}, nil
+}
+
+func (*server) Register(_ context.Context, req *pb.RegisterRequest) (*pb.RegisterReply, error) {
+	log.Printf("Starting registration")
+	email := req.Email
 
 	// check if already has account
 	// could reduce db calls, but we're students so who cares
-	pass, err := GetPasswordByEmail(ctx, email)
+	pass, err := GetPasswordByEmail(email)
 	if pass != "" {
 		return nil, errors.New("user already has a password set")
 	}
 
-	// NOTE: could also remove verification token
+	// could save this request
+	invitations, err := GetInviteOrganizationsByEmail(email)
+	if len(invitations) == 0 {
+		return nil, errors.New("user is not invited by any organizations")
+	}
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(pass), passwordCost)
 	if err != nil {
 		return nil, err
 	}
-	err = ChangePasswordForEmail(ctx, email, string(hashedPassword))
+
+	err = CreateAccount(email, string(hashedPassword), googleUuid.New().String())
 
 	if err != nil {
 		return nil, err
 	} else {
-		return &pb.RegisterReply{Success: true}, nil
+		return &pb.RegisterReply{}, nil
 	}
 }
 
-func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply, error) {
-	ret, err := GetPasswordByEmail(ctx, req.Email)
+func (*server) Login(_ context.Context, req *pb.LoginRequest) (*pb.LoginReply, error) {
+	ret, err := GetPasswordByEmail(req.Email)
 	if err != nil {
 		return nil, err
 	} else {
@@ -71,17 +92,43 @@ func (*server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply,
 		return nil, errors.New(fmt.Sprintf("incorrect password, %v", bcryptErr))
 	}
 
-	uuid, err := GetUuidByEmail(ctx, req.Email)
+	uuid, err := GetUuidByEmail(req.Email)
 	if err != nil {
 		return nil, err
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"uuid": uuid})
+	tokenString, err := CreateToken(uuid)
+	if err != nil {
+		return nil, err
+	}
 
-	tokenString, err := token.SignedString([]byte(jwtSecret))
+	err = AddJwtTokenToUser(uuid, tokenString)
 	if err != nil {
 		return nil, err
 	}
 
 	return &pb.LoginReply{Token: tokenString}, nil
+}
+
+func (s *server) ActivateEmail(_ context.Context, req *pb.ActivateEmailRequest) (*pb.ActivateEmailReply, error) {
+	verificationToken := req.Token
+	err := VerifyEmailByToken(verificationToken, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	return &pb.ActivateEmailReply{}, nil
+}
+
+func (s *server) DropSingleToken(_ context.Context, req *pb.DropSingleTokenRequest) (*pb.DropSingleTokenReply, error) {
+	jwtToken := req.Token
+	return &pb.DropSingleTokenReply{}, DropJwtToken(jwtToken)
+}
+
+func (s *server) DropAllTokens(_ context.Context, req *pb.DropAllTokensRequest) (*pb.DropAllTokensReply, error) {
+	jwtToken := req.Token
+	parsedToken, err := DecodeToken(jwtToken)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.DropAllTokensReply{}, DropAllTokensForUuid(parsedToken.Uuid)
 }
