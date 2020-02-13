@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	googleUuid "github.com/google/uuid"
 	"log"
 	"time"
 
@@ -68,7 +69,8 @@ func (*server) Register(_ context.Context, req *pb.RegisterRequest) (*pb.Registe
 	if err != nil {
 		return nil, err
 	}
-	err = ChangePasswordForEmail(email, string(hashedPassword))
+
+	err = CreateAccount(email, string(hashedPassword), googleUuid.New().String())
 
 	if err != nil {
 		return nil, err

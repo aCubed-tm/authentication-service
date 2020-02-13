@@ -84,7 +84,13 @@ func GetUuidByEmail(email string) (string, error) {
 	return uuid.(string), nil
 }
 
-func ChangePasswordForEmail(email string, password string) error {
+func CreateAccount(email, password, uuid string) error {
+	query := "MATCH (x:Email{emailAddress:{email}}) CREATE (x)<-[:HAS_EMAIL]-(:Account{password: {password}, active: true, uuid: {uuid}})"
+	variables := map[string]interface{}{"email": email, "password": password, "uuid": uuid}
+	return Write(query, variables)
+}
+
+func _(email string, password string) error { // ChangePasswordForEmail
 	query := "MATCH (:Email {emailAddress: {email}})<-[:HAS_EMAIL]-(a:Account) SET a.password = {password}"
 	variables := map[string]interface{}{"email": email, "password": password}
 	return Write(query, variables)
