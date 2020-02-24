@@ -81,6 +81,9 @@ func GetUuidByEmail(email string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if uuid == nil {
+		return "", nil
+	}
 	return uuid.(string), nil
 }
 
