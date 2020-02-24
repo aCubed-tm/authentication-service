@@ -21,7 +21,7 @@ func (*server) IsEmailRegistered(_ context.Context, req *pb.IsEmailRegisteredReq
 	if err != nil {
 		return nil, err
 	} else {
-		return &pb.IsEmailRegisteredReply{IsRegistered: true, AccountUuid: uuid}, nil
+		return &pb.IsEmailRegisteredReply{IsRegistered: uuid != "", AccountUuid: uuid}, nil
 	}
 }
 
