@@ -25,25 +25,14 @@ func (*server) IsEmailRegistered(_ context.Context, req *pb.IsEmailRegisteredReq
 	}
 }
 
-func (s *server) GetInvites(_ context.Context, req *pb.GetInvitesRequest) (*pb.GetInvitesReply, error) {
-	accountUuid := req.AccountUuid
-	emails, err := GetAllEmailsByUuid(accountUuid)
+func (s *server) GetInvitesByEmail(_ context.Context, req *pb.GetInvitesByEmailRequest) (*pb.GetInvitesByEmailReply, error) {
+	email := req.Email
+	ret, err := GetInviteOrganizationsByEmail(email)
 	if err != nil {
 		return nil, err
 	}
 
-	var ret []string
-	for _, email := range emails {
-		invites, err := GetInviteOrganizationsByEmail(email)
-		if err != nil {
-			return nil, err
-		}
-		for _, invite := range invites {
-			ret = append(ret, invite)
-		}
-	}
-
-	return &pb.GetInvitesReply{
+	return &pb.GetInvitesByEmailReply{
 		OrganizationUuids: ret,
 	}, nil
 }
