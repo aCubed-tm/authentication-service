@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"time"
 
 	"github.com/neo4j/neo4j-go-driver/neo4j"
@@ -33,7 +34,7 @@ func newSession(accessMode neo4j.AccessMode) neo4j.Session {
 	return session
 }
 
-func _(email string) (bool, error) { // CheckEmailExists
+func CheckEmailExists(email string) (bool, error) {
 	query := "MATCH (e:Email {emailAddress: {email}}) RETURN COUNT(e)"
 	variables := map[string]interface{}{"email": email}
 	count, err := FetchSingle(query, variables)
@@ -43,9 +44,40 @@ func _(email string) (bool, error) { // CheckEmailExists
 	return count.(int64) > 0, nil
 }
 
+func CheckEmailPrimary(uuid string) (bool, error) {
+	query := "MATCH (e:Email {uuid: {uuid}}) RETURN e.isPrimary"
+	variables := map[string]interface{}{"uuid": uuid}
+	isPrimary, err := FetchSingle(query, variables)
+	if err != nil {
+		return false, err
+	}
+	if isPrimary == nil {
+		return false, errors.New("email not found")
+	}
+	return isPrimary.(bool), nil
+}
+
+func DeleteEmail(uuid string) error {
+	query := "MATCH (e:Email{uuid:{uuid}}) DETACH DELETE e"
+	variables := map[string]interface{}{"uuid": uuid}
+	return Write(query, variables)
+}
+
+func AddEmailToUser(uuidAccount, uuidEmail, emailAddress, verificationToken string) error {
+	query := "MATCH (x:Account{uuid:{uuidAccount}}) CREATE (x)-[:HAS_EMAIL]->(:Email{emailAddress:{email}, isPrimary:false, verificationToken:{token}, uuid:{uuidEmail}})"
+	variables := map[string]interface{}{"uuidAccount": uuidAccount, "email": emailAddress, "token": verificationToken, "uuidEmail": uuidEmail}
+	return Write(query, variables)
+}
+
 func VerifyEmailByToken(token string, verificationTime time.Time) error {
 	query := "MATCH (e:Email {verificationToken: {token}}) SET e.verifiedAt = {date}"
 	variables := map[string]interface{}{"token": token, "date": verificationTime.Unix()}
+	return Write(query, variables)
+}
+
+func SetNewPrimaryEmail(uuid string) error {
+	query := "MATCH (e1:Email{uuid: {uuid}})<-[:HAS_EMAIL]-(:Account)-[:HAS_EMAIL]->(e2:Email) SET e1.isPrimary=true SET e2.isPrimary=false"
+	variables := map[string]interface{}{"uuid": uuid}
 	return Write(query, variables)
 }
 
