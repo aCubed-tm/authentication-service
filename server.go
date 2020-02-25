@@ -16,6 +16,14 @@ const passwordCost = 12
 
 type server struct{}
 
+func (s *server) GetUuidFromToken(_ context.Context, req *pb.GetUuidFromTokenRequest) (*pb.GetUuidFromTokenReply, error) {
+	decoded, err := DecodeToken(req.Token)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.GetUuidFromTokenReply{Uuid: decoded.Uuid}, nil
+}
+
 func (*server) IsEmailRegistered(_ context.Context, req *pb.IsEmailRegisteredRequest) (*pb.IsEmailRegisteredReply, error) {
 	uuid, err := GetUuidByEmail(req.Email)
 	if err != nil {
@@ -120,4 +128,53 @@ func (s *server) DropAllTokens(_ context.Context, req *pb.DropAllTokensRequest) 
 		return nil, err
 	}
 	return &pb.DropAllTokensReply{}, DropAllTokensForUuid(parsedToken.Uuid)
+}
+
+func (s *server) MakeEmailPrimary(_ context.Context, req *pb.MakeEmailPrimaryRequest) (*pb.MakeEmailPrimaryReply, error) {
+	emailUuid := req.EmailUuid
+	err := SetNewPrimaryEmail(emailUuid)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.MakeEmailPrimaryReply{}, nil
+}
+
+func (s *server) AddEmail(_ context.Context, req *pb.AddEmailRequest) (*pb.AddEmailReply, error) {
+	email := req.Email
+	exists, err := CheckEmailExists(email)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, errors.New("email already exists")
+	}
+
+	// actually add mail
+	newEmailUuid := googleUuid.New().String()
+	verificationToken := googleUuid.New().String()
+	err = AddEmailToUser(req.AccountUuid, newEmailUuid, email, verificationToken)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.AddEmailReply{
+		EmailUuid:         newEmailUuid,
+		VerificationToken: verificationToken,
+	}, nil
+}
+
+func (s *server) DeleteEmail(_ context.Context, req *pb.DeleteEmailRequest) (*pb.DeleteEmailReply, error) {
+	isPrimary, err := CheckEmailPrimary(req.Uuid)
+	if err != nil {
+		return nil, err
+	}
+	if isPrimary {
+		return nil, errors.New("cannot delete primary email")
+	}
+
+	err = DeleteEmail(req.Uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.DeleteEmailReply{}, nil
 }
