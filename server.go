@@ -62,7 +62,7 @@ func (*server) Register(_ context.Context, req *pb.RegisterRequest) (*pb.Registe
 		return nil, errors.New("user is not invited by any organizations")
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(pass), passwordCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), passwordCost)
 	if err != nil {
 		return nil, err
 	}
